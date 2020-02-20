@@ -16,11 +16,11 @@
 #define PRINT_FPS 1
 
 //NeoPixelBus settings
-const uint8_t PixelPin = 3;  // make sure to set this to the correct pin, ignored for Esp8266(set to 3 by default for DMA)
+const uint8_t PixelPin = 21;  // make sure to set this to the correct pin, ignored for Esp8266(set to 3 by default for DMA)
 
 // Wifi and socket settings
-const char* ssid     = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid     = "goldjunge";
+const char* password = "dingleberry";
 unsigned int localPort = 7777;
 char packetBuffer[BUFFER_LEN];
 
@@ -29,9 +29,9 @@ uint8_t N = 0;
 WiFiUDP port;
 // Network information
 // IP must match the IP in config.py
-IPAddress ip(192, 168, 0, 150);
+IPAddress ip(192, 168, 1, 150);
 // Set gateway to your router's gateway
-IPAddress gateway(192, 168, 0, 1);
+IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> ledstrip(NUM_LEDS, PixelPin);
 

@@ -99,23 +99,23 @@ p_filt = dsp.ExpFilter(np.tile(1, (3, config.N_PIXELS // 2)),
                        alpha_decay=0.1, alpha_rise=0.99)
 p = np.tile(1.0, (3, config.N_PIXELS // 2))
 gain = dsp.ExpFilter(np.tile(0.01, config.N_FFT_BINS),
-                     alpha_decay=0.001, alpha_rise=0.99)
+                     alpha_decay=0.0001, alpha_rise=0.99)
 
 
 def visualize_scroll(y):
     """Effect that originates in the center and scrolls outwards"""
     global p
     y = y**2.0
-    gain.update(y)
-    y /= gain.value
+    gain.update(y)    
+    # y /= gain.value
     y *= 255.0
     r = int(np.max(y[:len(y) // 3]))
     g = int(np.max(y[len(y) // 3: 2 * len(y) // 3]))
     b = int(np.max(y[2 * len(y) // 3:]))
     # Scrolling effect window
-    p[:, 1:] = p[:, :-1]
-    p *= 0.98
-    p = gaussian_filter1d(p, sigma=0.2)
+    p[:, 1:] = p[:, :-1]    
+    p *= 0.85
+    p = gaussian_filter1d(p, sigma=0.05)
     # Create new color originating at the center
     p[0, 0] = r
     p[1, 0] = g
@@ -159,15 +159,18 @@ _prev_spectrum = np.tile(0.01, config.N_PIXELS // 2)
 
 def visualize_spectrum(y):
     """Effect that maps the Mel filterbank frequencies onto the LED strip"""
-    global _prev_spectrum
+    global _prev_spectrum    
     y = np.copy(interpolate(y, config.N_PIXELS // 2))
     common_mode.update(y)
     diff = y - _prev_spectrum
     _prev_spectrum = np.copy(y)
-    # Color channel mappings
+    # Color channel mappings    
     r = r_filt.update(y - common_mode.value)
     g = np.abs(diff)
-    b = b_filt.update(np.copy(y))
+    b = b_filt.update(np.copy(y))    
+    # r = [255 if val >= 0.6 else 0 for val in common_mode.value] # - common_mode.value)
+    # g = [255 if 0.25 <= val < 0.6 else 0 for val in common_mode.value]
+    # b = [255 if 0.1 <= val < 0.25 else 0 for val in common_mode.value]  
     # Mirror the color channels for symmetric output
     r = np.concatenate((r[::-1], r))
     g = np.concatenate((g[::-1], g))
