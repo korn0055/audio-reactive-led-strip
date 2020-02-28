@@ -96,10 +96,12 @@ b_filt = dsp.ExpFilter(np.tile(0.01, config.N_PIXELS // 2),
 common_mode = dsp.ExpFilter(np.tile(0.01, config.N_PIXELS // 2),
                        alpha_decay=0.99, alpha_rise=0.01)
 p_filt = dsp.ExpFilter(np.tile(1, (3, config.N_PIXELS // 2)),
-                       alpha_decay=0.1, alpha_rise=0.99)
+                       alpha_decay=0.5, alpha_rise=0.99)
+energy_peak = dsp.ExpFilter(1,
+                       alpha_decay=0.01, alpha_rise=0.9999)
 p = np.tile(1.0, (3, config.N_PIXELS // 2))
 gain = dsp.ExpFilter(np.tile(0.01, config.N_FFT_BINS),
-                     alpha_decay=0.0001, alpha_rise=0.99)
+                     alpha_decay=0.01, alpha_rise=0.5)
 
 
 def visualize_scroll(y):
@@ -107,19 +109,26 @@ def visualize_scroll(y):
     global p
     y = y**2.0
     gain.update(y)    
-    # y /= gain.value
-    y *= 255.0
+    y /= gain.value
+    y[y<0.5] = 0
+    # y *= 254.0 + 1
+    y *= 255
+    # y = np.log2(y) * np.log2(256)
     r = int(np.max(y[:len(y) // 3]))
     g = int(np.max(y[len(y) // 3: 2 * len(y) // 3]))
     b = int(np.max(y[2 * len(y) // 3:]))
+    # r = int(np.mean(y[:len(y) // 3]))
+    # g = int(np.mean(y[len(y) // 3: 2 * len(y) // 3]))
+    # b = int(np.mean(y[2 * len(y) // 3:]))
     # Scrolling effect window
     p[:, 1:] = p[:, :-1]    
-    p *= 0.85
-    p = gaussian_filter1d(p, sigma=0.05)
+    p *= 0.99
+    p = gaussian_filter1d(p, sigma=0.4)
     # Create new color originating at the center
-    p[0, 0] = r
-    p[1, 0] = g
-    p[2, 0] = b
+    thresh = 0.0
+    p[0, 0] = r if r > thresh else 0
+    p[1, 0] = g if r > thresh else 0
+    p[2, 0] = b if r > thresh else 0
     # Update the LED strip
     return np.concatenate((p[:, ::-1], p), axis=1)
 
@@ -133,25 +142,87 @@ def visualize_energy(y):
     # Scale by the width of the LED strip
     y *= float((config.N_PIXELS // 2) - 1)
     # Map color channels according to energy in the different freq bands
-    scale = 0.9
+    scale = 0.98
     r = int(np.mean(y[:len(y) // 3]**scale))
     g = int(np.mean(y[len(y) // 3: 2 * len(y) // 3]**scale))
     b = int(np.mean(y[2 * len(y) // 3:]**scale))
     # Assign color to different frequency regions
-    p[0, :r] = 255.0
+    max_value = 255.0 * 0.25   
+    p[0, :r] = max_value
     p[0, r:] = 0.0
-    p[1, :g] = 255.0
+    p[1, :g] = max_value 
     p[1, g:] = 0.0
-    p[2, :b] = 255.0
+    p[2, :b] = max_value
     p[2, b:] = 0.0
+
     p_filt.update(p)
     p = np.round(p_filt.value)
     # Apply substantial blur to smooth the edges
     p[0, :] = gaussian_filter1d(p[0, :], sigma=4.0)
     p[1, :] = gaussian_filter1d(p[1, :], sigma=4.0)
     p[2, :] = gaussian_filter1d(p[2, :], sigma=4.0)
-    # Set the new pixel value
+    # Set the new pixel value    
+    pp = np.concatenate((p[:, ::-1], p), axis=1)    
+    return pp
+
+def visualize_energy_asym(y):
+    """Effect that expands from the center with increasing sound energy"""
+    global p
+    y = np.copy(y)
+    gain.update(y)
+    y /= gain.value
+    # Scale by the width of the LED strip
+    y *= float((config.N_PIXELS // 2) - 1)
+    # Map color channels according to energy in the different freq bands
+    scale = 0.98
+    total_energy = int(np.mean(y**scale))    
+    # Assign color to different frequency regions
+
+    energy_peak.update(total_energy)
+    
+    max_value = 255.0 * 0.25  
+
+    p[:,:] = 0.0
+    p[1, :total_energy] = 100.0
+    peak_track_pixel = min(int(energy_peak.value), config.N_PIXELS // 2  - 1)
+    p[0, peak_track_pixel] = 255.0
+    p[1, peak_track_pixel] = 0.0
+    
+    
+    p_filt.update(p)
+    p = np.round(p_filt.value)
+    # Apply substantial blur to smooth the edges
+    # p[0, :] = gaussian_filter1d(p[0, :], sigma=1.0)
+    p[1, :] = gaussian_filter1d(p[1, :], sigma=1.0)
+    p[2, :] = gaussian_filter1d(p[2, :], sigma=1.0)
+    # Set the new pixel value    
     return np.concatenate((p[:, ::-1], p), axis=1)
+
+def visualize_energy_scalar(y):
+    """Effect that expands from the center with increasing sound energy"""
+    global p
+    y = np.copy(y)
+    gain.update(y)
+    y /= gain.value
+    # Scale by the width of the LED strip
+    y *= float((config.N_PIXELS // 2) - 1)
+    # Map color channels according to energy in the different freq bands
+    scale = 0.98
+    r = int(np.mean(y[:len(y) // 3]**scale))
+    g = int(np.mean(y[len(y) // 3: 2 * len(y) // 3]**scale))
+    b = int(np.mean(y[2 * len(y) // 3:]**scale))
+    # Assign color to different frequency regions
+    max_value = 255.0 * 1.0   
+    p[0, :] = min(r, max_value)
+    p[1, :] = min(g, max_value)
+    p[2, :] = min(b, max_value)
+
+    p_filt.update(p)
+    p = np.round(p_filt.value)
+
+    # Set the new pixel value    
+    pp = np.concatenate((p[:, ::-1], p), axis=1)    
+    return pp
 
 
 _prev_spectrum = np.tile(0.01, config.N_PIXELS // 2)
@@ -190,24 +261,53 @@ volume = dsp.ExpFilter(config.MIN_VOLUME_THRESHOLD,
 fft_window = np.hamming(int(config.MIC_RATE / config.FPS) * config.N_ROLLING_HISTORY)
 prev_fps_update = time.time()
 
+weak_volume_count = 0
+strong_volumn_count = 0
+MUTE_COUNT_THRESHOLD = int(config.MUTE_THESHOLD_SECONDS * config.FPS)
+UNMUTE_COUNT_THRESHOLD = int(config.UNMUTE_THESHOLD_SECONDS * config.FPS)
+muting = False
 
 def microphone_update(audio_samples):
-    global y_roll, prev_rms, prev_exp, prev_fps_update
+    global y_roll, prev_rms, prev_exp, prev_fps_update, weak_volume_count, strong_volumn_count, muting
     # Normalize samples between 0 and 1
     y = audio_samples / 2.0**15
-    # Construct a rolling window of audio samples
+    # Construct a rolling window of audio samples    
     y_roll[:-1] = y_roll[1:]
     y_roll[-1, :] = np.copy(y)
     y_data = np.concatenate(y_roll, axis=0).astype(np.float32)
     
     vol = np.max(np.abs(y_data))
     if vol < config.MIN_VOLUME_THRESHOLD:
+        strong_volumn_count = 0
         print('No audio input. Volume below threshold. Volume:', vol)
+        if not muting:
+            weak_volume_count += 1
+            print('weak volume count = ', weak_volume_count)
+    else:
+        weak_volume_count = 0
+        if muting:
+            strong_volumn_count += 1
+            print('strong volume count = ', strong_volumn_count)
+
+    if muting:
+        print("MUTING")
+        if strong_volumn_count > UNMUTE_COUNT_THRESHOLD:
+            print("UNMUTE")
+            muting = False
+            # strong_volumn_count = 0
+            # weak_volume_count = 0
+    else:
+        if weak_volume_count > MUTE_COUNT_THRESHOLD:
+            muting = True
+            # strong_volumn_count = 0
+            # weak_volume_count = 0
+
+    if muting:
         led.pixels = np.tile(0, (3, config.N_PIXELS))
         led.update()
     else:
         # Transform audio input into the frequency domain
-        N = len(y_data)
+        N = len(y_data)        
         N_zeros = 2**int(np.ceil(np.log2(N))) - N
         # Pad with zeros until the next power of two
         y_data *= fft_window
@@ -250,8 +350,14 @@ samples_per_frame = int(config.MIC_RATE / config.FPS)
 
 # Array containing the rolling audio sample window
 y_roll = np.random.rand(config.N_ROLLING_HISTORY, samples_per_frame) / 1e16
+start_time = time.time()
+effects = [visualize_energy_asym, visualize_energy, visualize_spectrum, visualize_scroll]
 
-visualization_effect = visualize_spectrum
+def visualization_cycle_all(mel):
+    index = int((time.time() - start_time) // config.DWELL_TIME_SECONDS) % len(effects)
+    return effects[index](mel)        
+
+visualization_effect = visualization_cycle_all
 """Visualization effect to display on the LED strip"""
 
 
